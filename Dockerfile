@@ -25,10 +25,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # README.md: pyproject.toml의 readme 설정에 필요
 COPY pyproject.toml uv.lock* README.md ./
 
-# 의존성 설치 (production 모드)
-# --frozen: uv.lock 파일 기준으로 정확한 버전 설치
-# --no-dev: 개발 의존성 제외
-# --no-cache: Docker 이미지 크기 최적화
+# TODO 1: 의존성 설치 명령어 작성
 RUN uv sync --frozen --no-dev --no-cache
 
 # Stage 2: 런타임 스테이지
@@ -55,7 +52,7 @@ COPY data/ ./data/
 # pyproject.toml, README.md 복사 (uv run에 필요)
 COPY pyproject.toml README.md ./
 
-# 보안: non-root 유저 생성 및 권한 설정 : Production에서는 절대 root로 실행하면 안 됨
+# TODO 2: 보안 설정 - non-root 유저 생성 및 권한 설정
 RUN useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 
@@ -67,12 +64,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# 헬스체크 설정 : 30초마다 /api/v1/health/ 엔드포인트 확인
+# TODO 3: 헬스체크 설정
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -fL http://localhost:8000/api/v1/health/ || exit 1
 
 # 포트 노출
 EXPOSE 8000
 
-# 서버 실행 : uv run을 사용하여 가상환경 내에서 실행
+# TODO 4: 서버 실행 명령어 작성(uv run)
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

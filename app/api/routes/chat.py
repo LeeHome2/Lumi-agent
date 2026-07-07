@@ -4,7 +4,8 @@
 LangGraph 에이전트를 호출하여 사용자 메시지를 처리합니다.
 
 엔드포인트:
-    POST /chat/          - 채팅 메시지 전송
+    POST /chat/              - 채팅 메시지 전송 (일반)
+    POST /chat/stream        - SSE 스트리밍
 """
 
 from collections.abc import AsyncGenerator
@@ -26,7 +27,7 @@ SESSION_STORE: dict[str, list[BaseMessage]] = {}
 @router.post("/", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     """
-    채팅 엔드포인트
+    채팅 엔드포인트 (일반 - 비스트리밍)
 
     사용자 메시지를 LangGraph 에이전트로 처리하고 응답을 반환합니다.
 
@@ -89,7 +90,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
             tool_used=tool_used,
             cached=False,
         )
-        # 대화 히스토리 유지는 안함
 
     except Exception as e:
         logger.error(f"채팅 처리 오류: {e}")
@@ -97,19 +97,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
             status_code=500,
             detail=f"에이전트 처리 중 오류가 발생했습니다: {str(e)}",
         )
-
-
-# ─────────────────────────────────────────────────────────────
-# Generator vs AsyncGenerator, 그리고 yield
-# ─────────────────────────────────────────────────────────────
-# Generator      : yield로 값을 하나씩 만들어 내보내는 함수
-# AsyncGenerator : Generator의 비동기(async) 버전.
-#                  → async for 로 값을 하나씩 받고, 기다리는 동안 다른 작업 가능
-#
-# return vs yield  (음식 주문 비유)
-#   함수 + return : 요리를 "다 만든 뒤 한 번에" 건네줌   → 포장 주문
-#   generator + yield : 만들어지는 대로 "하나씩" 건네줌  → 회전초밥
-# ─────────────────────────────────────────────────────────────
 
 
 # SSE 스트리밍 - Helper 함수

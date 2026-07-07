@@ -4,7 +4,7 @@ LangGraph 그래프 구성
 이 모듈에서 노드와 엣지를 조합하여 완전한 그래프를 구성합니다.
 
 그래프 구조:
-    START -> router -> (조건부) -> rag/tool/response -> response -> END
+    Entry -> router -> (조건부) -> rag/tool/response -> response -> END
 
     1. router: 의도 분류
     2. 조건부 라우팅:
@@ -29,6 +29,37 @@ _compiled_graph = None
 def create_lumi_graph() -> StateGraph:
     """
     루미 에이전트 그래프를 생성하고 컴파일합니다.
+
+    그래프 구조:
+        ```
+                      ┌─────────┐
+                      │  START  │
+                      └────┬────┘
+                           │
+                           ▼
+                      ┌─────────┐
+                      │ router  │
+                      └────┬────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+              ▼            ▼            ▼
+         ┌────────┐   ┌────────┐   ┌──────────┐
+         │  rag   │   │  tool  │   │ response │
+         └────┬───┘   └────┬───┘   └────┬─────┘
+              │            │            │
+              └────────────┼────────────┘
+                           │
+                           ▼
+                      ┌─────────┐
+                      │ response│ (rag/tool에서 온 경우)
+                      └────┬────┘
+                           │
+                           ▼
+                      ┌─────────┐
+                      │   END   │
+                      └─────────┘
+        ```
 
     Returns:
         CompiledStateGraph: 컴파일된 LangGraph 그래프

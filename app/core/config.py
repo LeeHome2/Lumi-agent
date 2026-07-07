@@ -43,8 +43,6 @@ class Settings(BaseSettings):
     # Upstage Solar 모델: solar-pro3, solar-mini
     llm_model: str = "solar-pro3"
 
-    embedding_model: str = "solar-embedding-1-large-passage"
-
     # ===== 데이터베이스 설정 =====
     # Supabase 프로젝트 URL
     supabase_url: str = ""

@@ -4,34 +4,46 @@ Lumi Agent FastAPI 애플리케이션
 이 파일은 FastAPI 애플리케이션의 진입점입니다.
 서버 실행, 미들웨어 설정, 라우터 등록 등을 담당합니다.
 
-Gradio UI가 /ui 경로에 마운트되어 있습니다.
-
 실행 방법:
     # 개발 서버 (자동 리로드)
-    uv run uvicorn app.main:app --reload --reload-dir app
+    uv run uvicorn app.main:app --reload
 
     # 프로덕션 서버
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-접속:
-    - API 문서: http://localhost:8000/docs
-    - Gradio UI: http://localhost:8000/ui
+    # Docker로 실행
+    docker-compose up --build
+
+    # 테스트 실행
+    uv run pytest tests/ -v
+
+API 문서:
+    - Swagger UI: http://localhost:8000/docs
+    - ReDoc: http://localhost:8000/redoc
+
+🆕 5강 추가 내용:
+    - Docker 컨테이너화 (Dockerfile, docker-compose.yml)
+    - GCP Compute Engine 배포
 """
 
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import gradio as gr
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.routes import api_router
 from app.core.config import settings
 from app.ui import create_demo
 
-logger.remove()
+# ===== 로깅 설정 =====
+# loguru를 사용하여 구조화된 로깅 설정
+logger.remove()  # 기본 핸들러 제거
 logger.add(
     sys.stdout,
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
@@ -67,25 +79,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"디버그 모드: {settings.debug}")
     logger.info("=" * 50)
 
+    # 설정 검증 (필수 환경변수 확인)
     _validate_settings()
 
-    # 데이터베이스(Supabase) 연결 초기화
-    try:
-        from app.repositories import get_supabase_client
-
-        client = await get_supabase_client()
-        if client is not None:
-            logger.info("✅ Supabase 클라이언트 초기화 완료")
-        else:
-            logger.warning("⚠️ Supabase 미연결 (URL/KEY 미설정) - DB 기능 비활성화")
-    except Exception as e:
-        logger.error(f"Supabase 초기화 실패: {e}")
-
-    # LangGraph 그래프 초기화
+    # LangGraph 그래프 초기화 (워밍업)
     try:
         from app.graph import get_lumi_graph
 
-        graph = get_lumi_graph()  # noqa:F841
+        _ = get_lumi_graph()  # 워밍업: 그래프 컴파일만 수행
         logger.info("✅ LangGraph 그래프 컴파일 완료")
     except Exception as e:
         logger.error(f"LangGraph 초기화 실패: {e}")
@@ -105,14 +106,22 @@ def _validate_settings():
     """
     if not settings.upstage_api_key:
         logger.warning(
-            "UPSTAGE_API_KEY가 설정되지 않았습니다. LLM 기능을 사용할 수 없습니다."
+            "⚠️ UPSTAGE_API_KEY가 설정되지 않았습니다. LLM 기능을 사용할 수 없습니다."
         )
 
+    if not settings.supabase_url or not settings.supabase_key:
+        logger.warning(
+            "⚠️ Supabase 설정이 완료되지 않았습니다. Mock 데이터를 사용합니다."
+        )
+
+    # Production 환경에서는 디버그 모드 비활성화 필요
     if settings.environment == "production" and settings.debug:
-        logger.warning("Production 환경에서 DEBUG 모드가 활성화되어 있습니다!")
+        logger.warning("⚠️ Production 환경에서 DEBUG 모드가 활성화되어 있습니다!")
 
 
+# ===== FastAPI 애플리케이션 생성 =====
 app = FastAPI(
+    # 기본 정보
     title="Lumi Agent API",
     description="""
     ## 루미(Lumi) - 버추얼 아이돌 AI 에이전트
@@ -129,8 +138,9 @@ app = FastAPI(
     - Upstage Solar: LLM API
     - FastAPI: 웹 프레임워크
     - Supabase: 데이터베이스
+
     """,
-    version="0.2.0",
+    version="0.5.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -140,9 +150,10 @@ app = FastAPI(
 # ===== CORS 미들웨어 설정 =====
 # Cross-Origin Resource Sharing 설정
 # 프론트엔드에서 API를 호출할 수 있도록 허용
-# 브라우저가 다른 주소(도메인/포트)에 있는 내 서버로 요청을 보낼 수 있게 허락해 주는 문지기 설정
 app.add_middleware(
     CORSMiddleware,
+    # 개발 환경: 모든 origin 허용 (Gradio 포함)
+    # Production: 특정 도메인만 허용하도록 변경 필요
     allow_origins=["*"] if settings.debug else [],
     allow_credentials=True,
     allow_methods=["*"],
@@ -156,44 +167,48 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
+# ===== Static 파일 마운트 =====
+# favicon, og-image 등 정적 파일 서빙
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
 # ===== Gradio UI 마운트 =====
 # /ui 경로에서 Gradio 채팅 인터페이스 제공
-# 같은 서버에서 API와 UI를 함께 서비스
-# 🍽️ mount = '같은 건물(서버)에 홀(UI)과 주방(API)을 함께 두기'(co-hosting). 한 uvicorn 프로세스가 /docs·/api·/ui를 모두 서빙.
-#    (참고: Gradio는 브라우저에서 JS로 화면을 그리는 CSR 방식 — 서버가 완성 HTML을 내려주는 SSR이 아님)
 gradio_app = create_demo()
 app = gr.mount_gradio_app(app, gradio_app, path="/ui")
-logger.info("✅ Gradio UI 마운트 완료: /ui")
 
 
 # ===== 루트 엔드포인트 =====
-# FastAPI에서 API 엔드포인트(요청을 받을 URL 경로)를 정의하는 부분
-#   @app.get   : GET 요청을 처리 (데이터 조회)
-#   "/"        : URL 경로(Endpoint)를 의미
-#   tags=[...] : API 문서(/docs)에서 그룹으로 묶어줄 태그 이름
 @app.get("/", tags=["Root"])
 async def root():
-    """
-    루트 - Gradio UI로 리다이렉트
-    루트로 접속했을 때(/) -> 바로 Gradio UI가 나오도록 하고 싶다
-    """
+    """루트 - Gradio UI로 리다이렉트"""
     return RedirectResponse(url="/ui")
 
 
-# 기존 루트 -> /api로 이동
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """브라우저 기본 favicon 요청 처리"""
+    return RedirectResponse(url="/static/favicon.svg")
+
+
 @app.get("/api", tags=["Root"])
 async def api_info() -> dict:
     """API 정보"""
     return {
-        "message": "Lumi Agent API에 오신 것을 환영합니다!",
-        "docs": {
-            "swagger": "/docs",
-            "redoc": "/redoc",
-        },
+        "message": "Lumi Agent API",
+        "docs": "/docs",
         "ui": "/ui",
+        "endpoints": {
+            "health": "/api/v1/health",
+            "chat": "/api/v1/chat",
+            "chat_stream": "/api/v1/chat/stream",
+        },
     }
 
 
+# ===== 직접 실행 시 =====
 if __name__ == "__main__":
     import uvicorn
 

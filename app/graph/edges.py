@@ -17,7 +17,7 @@ from app.graph.state import LumiState
 
 def route_by_intent(state: LumiState) -> Literal["rag", "tool", "response"]:
     """
-    의도에 따른 조건부 라우팅
+    🔀 의도에 따른 조건부 라우팅
 
     Router 노드에서 결정된 intent에 따라
     다음 노드를 결정합니다.

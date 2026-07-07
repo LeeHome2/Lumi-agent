@@ -1,10 +1,3 @@
-"""
-채팅 API 요청/응답 스키마
-
-이 모듈에서 채팅 관련 API의 데이터 모델을 정의합니다.
-2강에서 실제 채팅 API 구현 시 사용됩니다.
-"""
-
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -12,23 +5,6 @@ from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    """
-    채팅 요청 스키마
-
-    클라이언트에서 서버로 보내는 채팅 메시지 형식입니다.
-
-    Attributes:
-        message: 사용자 메시지 내용
-        session_id: 세션 식별자 (대화 지속성)
-        user_id: 사용자 식별자 (선택)
-
-    Example:
-        >>> request = ChatRequest(
-        ...     message="오늘 방송 언제야?",
-        ...     session_id="user123",
-        ... )
-    """
-
     message: str = Field(
         ...,
         min_length=1,
@@ -53,24 +29,6 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """
-    채팅 응답 스키마
-
-    서버에서 클라이언트로 보내는 응답 형식입니다.
-
-    Attributes:
-        message: 루미의 응답 메시지
-        tool_used: 사용된 Tool 이름 (있는 경우)
-        cached: 캐시된 응답 여부
-        timestamp: 응답 생성 시간
-
-    Example:
-        >>> response = ChatResponse(
-        ...     message="금요일에 뮤직뱅크 나와!",
-        ...     tool_used="get_schedule",
-        ... )
-    """
-
     message: str = Field(
         ...,
         description="루미의 응답 메시지",
@@ -97,6 +55,7 @@ class ChatResponse(BaseModel):
 # 스트리밍 관련 스키마
 # =============================================================
 
+# 스트리밍 이벤트 타입
 StreamEventType = Literal["thinking", "tool", "token", "response", "error", "done"]
 
 

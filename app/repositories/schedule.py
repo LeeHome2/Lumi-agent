@@ -25,7 +25,12 @@ class ScheduleRepository:
 
     def __init__(self):
         """ScheduleRepository 초기화"""
-        logger.info("📋 ScheduleRepository 준비 (연결은 첫 조회 때)")
+        self.client = get_supabase_client()
+        if not self.client:
+            raise ValueError(
+                "Supabase 클라이언트가 설정되지 않았습니다. .env 파일을 확인하세요."
+            )
+        logger.info("📋 Supabase 연결됨")
 
     async def get_schedules(
         self,
@@ -44,15 +49,8 @@ class ScheduleRepository:
         Returns:
             list[dict]: 스케줄 목록
         """
-        # 비동기 클라이언트를 그때그때 가져온다 (await 필요)
-        client = await get_supabase_client()
-        if not client:
-            raise ValueError(
-                "Supabase 클라이언트가 설정되지 않았습니다. .env 파일을 확인하세요."
-            )
-
         try:
-            query = client.table("schedules").select("*")
+            query = self.client.table("schedules").select("*")
 
             # 날짜 필터 (start_time 컬럼 사용)
             if start_date:
@@ -63,8 +61,7 @@ class ScheduleRepository:
             if event_type:
                 query = query.eq("event_type", event_type)
 
-            # 비동기 실행: await 로 결과를 기다린다
-            response = await query.order("start_time").execute()
+            response = query.order("start_time").execute()
 
             logger.info(f"✅ Supabase 결과: {len(response.data)}건")
             return response.data

@@ -1,9 +1,14 @@
 # Lumi Agent CD 워크플로우 (GHCR + Compute Engine 배포)
 #
-# 이 워크플로우는 CI(Lumi Agent CI)가 main 브랜치에서 "성공"한 뒤에만 실행됩니다.
-# → 린트·테스트가 깨진 코드는 배포되지 않음 (CI를 CD의 전제 조건으로 삼음)
+# 이 워크플로우는 CI(Lumi Agent CI)가 main 브랜치에서 성공한 뒤 실행됩니다.
 # GitHub Actions에서 Docker 이미지를 빌드하고 GHCR에 Push한 후,
 # Compute Engine에서는 Pull만 하여 빠르게 배포합니다.
+#
+# GHCR 방식의 장점:
+#   - GitHub Actions에서 빌드 → Compute Engine 부하 없음
+#   - Compute Engine에서는 Pull만 하면 됨 → 배포 시간 단축 (3분 → 30초)
+#   - 여러 서버 배포 시 한 번만 빌드
+#   - GitHub 통합 (별도 계정 불필요)
 #
 # 주요 단계:
 #   1. GitHub Actions에서 Docker 이미지 빌드
@@ -22,16 +27,16 @@
 
 name: Lumi Agent CD
 
-# ── 트리거: "언제 배포를 시작할까?" ──────────────────────────────
+# TODO 1: 트리거 설정 — CI(Lumi Agent CI)가 main에서 "성공"한 뒤에만 실행되도록
 on:
-  # ① CI(Lumi Agent CI)가 main 브랜치에서 완료되면 이 워크플로우가 깨어남
-  #    (성공/실패 모두 여기서 받고, "성공"만 걸러내는 건 아래 build-and-push 의 if 에서 함)
   workflow_run:
-    workflows: ["Lumi Agent CI"]   # ci.yml 의 name 과 정확히 일치해야 연결됨
-    types: [completed]             # CI가 "완료"됐을 때
-    branches: [main]               # main 브랜치의 CI만 대상
+    workflows: ["Lumi Agent CI"]
+    types: [completed]
+    branches: [main]
 
-  # ② 수동 실행 허용 (긴급 배포 / 롤백용) — Actions 탭의 Run workflow 버튼
+  # 여기에 구현하세요!
+
+  # 수동 실행 허용 (긴급 배포/롤백용)
   workflow_dispatch:
     inputs:
       rollback:
@@ -40,12 +45,13 @@ on:
         type: boolean
         default: false
 
-# 🔑 GHCR(GitHub Container Registry)에 이미지를 Push하려면 packages 쓰기 권한이 필요
+# TODO 2: GHCR Push 권한 설정
 permissions:
   contents: read
   packages: write
+  # 여기에 구현하세요!
 
-# 모든 Job에서 공유하는 환경 변수
+# 환경 변수
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/lumi-agent
@@ -81,25 +87,26 @@ jobs:
         run: |
           echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # GHCR 로그인
+      # TODO 3: GHCR 로그인
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          # 여기에 구현하세요!
 
-      # 이미지 태그 생성 (소문자 이미지 이름 사용)
+      # 이미지 태그 생성
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,prefix=
             type=raw,value=latest
 
-      # 이미지 빌드 & Push
+      # TODO 4: 이미지 빌드 & Push
       - name: Build and Push
         id: build
         uses: docker/build-push-action@v5
@@ -107,9 +114,9 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # 여기에 구현하세요!
 
       - name: Print image info
         run: |
@@ -144,7 +151,6 @@ jobs:
             # 환경 변수 설정 (✅ 소문자 정규화 포함)
             REGISTRY="ghcr.io"
             IMAGE_NAME=$(echo "${{ github.repository }}/lumi-agent" | tr '[:upper:]' '[:lower:]')
-            # 짧은 SHA 사용 (build의 type=sha와 일치)
             IMAGE_TAG=$(echo "${{ github.sha }}" | cut -c1-7)
             FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
             DEPLOY_DIR="/home/${{ secrets.GCE_USERNAME }}/lumi-agent"
@@ -211,8 +217,7 @@ jobs:
             echo "📦 이미지 Pull 중... (이미 빌드된 이미지)"
             docker pull ${FULL_IMAGE}
 
-            # Step 3: docker-compose.yml에서 이미지 태그 업데이트
-            # 또는 환경 변수로 전달
+            # Step 3: 환경 변수로 이미지 전달
             export LUMI_IMAGE=${FULL_IMAGE}
 
             # Step 4: 컨테이너 교체 (다운타임 최소화)
@@ -220,7 +225,6 @@ jobs:
             $DOCKER_COMPOSE up -d --force-recreate
 
             # Step 5: 헬스체크 (최대 60초 대기)
-            # trailing slash + 리다이렉트 따라가기 (-sL)
             echo "⏳ 헬스체크 중..."
             MAX_RETRIES=12
             RETRY_INTERVAL=5

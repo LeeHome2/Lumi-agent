@@ -7,11 +7,8 @@ pytest를 사용하여 API 엔드포인트를 테스트합니다.
     uv run pytest tests/test_api.py -v
 """
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage, HumanMessage
 
 from app.main import app
 
@@ -30,6 +27,11 @@ class TestRootEndpoint:
         response = client.get("/", follow_redirects=False)
         assert response.status_code == 307  # RedirectResponse
         assert "/ui" in response.headers.get("location", "")
+
+
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
+from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 
 
 class TestChatEndpoints:
