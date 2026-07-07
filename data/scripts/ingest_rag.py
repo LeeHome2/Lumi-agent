@@ -200,18 +200,30 @@ async def save_to_supabase(
     Returns:
         int: 저장된 레코드 수
     """
+    from supabase import create_client
 
     from app.core.config import settings
 
     if not settings.supabase_url or not settings.supabase_key:
         raise ValueError("Supabase 설정이 완료되지 않았습니다.")
 
+    client = create_client(settings.supabase_url, settings.supabase_key)
+
     logger.info("Supabase에 저장 시작...")
 
     saved_count = 0
-    for i, (_chunk, _vector) in enumerate(zip(chunks, vectors, strict=False)):
+    for i, (chunk, vector) in enumerate(zip(chunks, vectors, strict=False)):
         try:
             # 각 청크별 메타데이터 (원본 + 청크 인덱스)
+            chunk_metadata = {**metadata, "chunk_index": i, "chunk_total": len(chunks)}
+
+            (
+                client.table("documents")
+                .insert(
+                    {"content": chunk, "embedding": vector, "metadata": chunk_metadata}
+                )
+                .execute()
+            )
 
             saved_count += 1
 

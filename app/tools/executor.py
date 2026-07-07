@@ -111,11 +111,6 @@ class ToolExecutor:
         logger.debug(f"인자: {tool_args}")
 
         try:
-            # 💡 match/case = '도구 이름표 보고 알맞은 서랍 열기'. tool_name 값에 맞는 전용 메서드로 분배(dispatch)합니다.
-            #    - 다른 언어의 switch/case 문과 비슷합니다 (여러 값 중 하나에 맞춰 분기).
-            #    - 파이썬엔 원래 없다가 3.10부터 추가된 문법입니다 (3.9 이하에선 SyntaxError → if/elif로 대체해야 함).
-            #    - `case "get_schedule":` 처럼 값이 일치하면 그 블록 실행. `case _:` 는 '그 외 전부'(switch의 default).
-            #      모르는 도구면 case _ 로 떨어져 success:False 반환 → 뒤의 response 노드가 부드럽게 안내합니다.
             match tool_name:
                 case "get_schedule":
                     return await self._get_schedule(tool_args)

@@ -26,7 +26,11 @@ class FanLetterRepository:
 
     def __init__(self):
         """FanLetterRepository 초기화"""
-        logger.info("💌 FanLetterRepository 준비 (연결은 첫 저장 때)")
+        self.client = get_supabase_client()
+        if self.client:
+            logger.info("💌 Supabase 연결됨")
+        else:
+            logger.warning("💌 Supabase 미설정")
 
     async def create(
         self,
@@ -47,16 +51,9 @@ class FanLetterRepository:
         Returns:
             str: 생성된 팬레터 ID
         """
-        # 비동기 클라이언트를 그때그때 가져온다 (await 필요)
-        client = await get_supabase_client()
-        if not client:
-            logger.warning("💌 Supabase 미설정 — 저장을 건너뜁니다")
-            return ""
-
         try:
-            # 비동기 실행: insert 후 await 로 결과를 기다린다
-            response = await (
-                client.table("fan_letters")
+            response = (
+                self.client.table("fan_letters")
                 .insert(
                     {
                         "session_id": session_id,
